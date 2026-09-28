@@ -135,6 +135,11 @@ def render(meta: dict[str, Any], wcfg: dict[str, Any], markdown: bool) -> str:
     out.append(f"{'## ' if markdown else ''}{mark} 한눈에 정리\n")
     out += [f"✔ {s}" for s in meta["summary"]]
     out.append("\n" + meta["outro"].strip() + "\n")
+    if meta.get("sources"):
+        out.append(f"{'## ' if markdown else ''}📌 참고 출처\n")
+        out += [f"- [{src['title']}]({src['url']})" if markdown else f"- {src['title']}: {src['url']}"
+                for src in meta["sources"]]
+        out.append("")
     out.append(" ".join(f"#{h.lstrip('#').replace(' ', '')}" for h in meta["hashtags"]))
     return "\n".join(out) + "\n"
 

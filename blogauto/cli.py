@@ -45,57 +45,41 @@ def cmd_daily(args, settings):
             print(f"⚠️  {name} 건너뜀: {e}")
 
 
-def _check_and_report(post_dir: Path, settings, spell: bool, apply: bool):
-    from .writer import checker, draft
-    meta = draft.load_meta(post_dir)
-    ccfg = settings.get("checker", {})
-    rules = checker.load_rules(resolve(ccfg.get("banned_words_file", "config/banned_words.yaml")))
-    rep = checker.run_check(meta, draft.body_text(meta), rules, ccfg, spelling=spell)
-    if apply and rep.spelling:
-        n = checker.apply_spelling(meta, rep.spelling)
-        draft.save(meta, post_dir, settings.get("writer", {}))
-        print(f"✏️  맞춤법 수정 {n}건을 초안에 반영했습니다.")
-    path = post_dir / "check_report.md"
-    path.write_text(checker.report_markdown(rep), encoding="utf-8")
-    print(f"🔎 점검: 금칙어 {len(rep.findings)}건 · 경고 {len(rep.warnings)}건 · 맞춤법 {len(rep.spelling)}건 → {path}")
-    for f in rep.findings[:10]:
-        print(f"   - [{f.category}] '{f.word}' : {f.context}")
-    for w in rep.warnings:
-        print(f"   - ⚠️ {w}")
-
-
-def _images(post_dir: Path, settings, theme, thumb: int = 1):
-    from .images.cards import render_post
-    from .writer.draft import load_meta
-    paths = render_post(load_meta(post_dir), post_dir, settings.get("images", {}), theme, thumb=thumb)
-    print(f"🖼️  썸네일 1장(1:1) + 본문 이미지 {len(paths) - 1}장(16:9) 생성 → {post_dir / 'images'}")
-    print("   본문 속 위치는 draft.txt 의 [이미지: ...] 표시를 참고하세요.")
-
-
 def cmd_write(args, settings):
-    from .writer import draft
-    print("✍️  초안 작성 중... (1~3분 걸릴 수 있어요)")
-    post_dir, meta = draft.run(settings, args.topic, keyword=args.keyword, notes=args.notes or "", ref_files=args.ref)
-    print(f"✅ 초안 저장 → {post_dir}")
-    print("   제목 후보:")
-    for i, t in enumerate(meta["titles"], 1):
-        print(f"     {i}. {t}")
-    print("   해시태그: " + " ".join(f"#{h}" for h in meta["hashtags"]))
-    _check_and_report(post_dir, settings, spell=args.spell, apply=args.apply_spelling)
-    if not args.no_images:
-        _images(post_dir, settings, args.theme)
-    if meta.get("fact_check"):
-        print("📌 발행 전 공식 출처로 확인할 것:")
-        for f in meta["fact_check"]:
-            print(f"   - {f}")
+    from .pipeline import write_post
+    write_post(settings, args.topic, keyword=args.keyword, notes=args.notes or "", ref_files=args.ref,
+               web=args.web, spell=args.spell, apply=args.apply_spelling, images=not args.no_images, theme=args.theme)
+
+
+def cmd_hot(args, settings):
+    from .research import web
+    res = web.find_hot_topics(settings)
+    print(f"✅ 요즘 뜨는 주제 리포트 → {res['path']}")
+    for i, c in enumerate(res["candidates"], 1):
+        print(f"   {i:>2}. [{c['priority']}] {c['topic']}  (키워드: {c['main_keyword']})")
+    print('   ▶ 글쓰기: python -m blogauto write "주제" -k 키워드 --web')
+
+
+def cmd_auto(args, settings):
+    from .pipeline import auto_post
+    auto_post(settings, spell=args.spell, apply=args.apply_spelling, images=not args.no_images, theme=args.theme)
 
 
 def cmd_check(args, settings):
-    _check_and_report(Path(args.post_dir), settings, spell=args.spell, apply=args.apply_spelling)
+    from .pipeline import check_and_report
+    check_and_report(Path(args.post_dir), settings, spell=args.spell, apply=args.apply_spelling)
 
 
 def cmd_images(args, settings):
-    _images(Path(args.post_dir), settings, args.theme, args.thumb)
+    from .pipeline import render_images
+    render_images(Path(args.post_dir), settings, args.theme, args.thumb)
+
+
+def _post_options(s: argparse.ArgumentParser) -> None:
+    s.add_argument("--spell", action="store_true", help="AI 맞춤법 검사 포함")
+    s.add_argument("--apply-spelling", action="store_true", help="맞춤법 수정안을 초안에 바로 반영")
+    s.add_argument("--no-images", action="store_true")
+    s.add_argument("--theme", help="이미지 테마: navy|mint|coral|mono|forest")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -126,11 +110,16 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--keyword", "-k", help="메인 키워드")
     s.add_argument("--notes", "-n", help="추가 요청 (예: '신청 방법을 단계별로 자세히')")
     s.add_argument("--ref", "-r", action="append", help="참고자료 텍스트 파일 (공고 원문 등, 여러 번 지정 가능)")
-    s.add_argument("--spell", action="store_true", help="AI 맞춤법 검사 포함")
-    s.add_argument("--apply-spelling", action="store_true", help="맞춤법 수정안을 초안에 바로 반영")
-    s.add_argument("--no-images", action="store_true")
-    s.add_argument("--theme", help="이미지 테마: navy|mint|coral|mono|forest")
+    s.add_argument("--web", "-w", action="store_true", help="웹에서 공식 자료·뉴스를 검색해 참고자료로 사용")
+    _post_options(s)
     s.set_defaults(func=cmd_write)
+
+    s = sub.add_parser("hot", help="웹 검색으로 요즘 뜨는 생활정보 주제 찾기 (네이버 키 불필요)")
+    s.set_defaults(func=cmd_hot)
+
+    s = sub.add_parser("auto", help="알아서 쓰기: 뜨는 주제 찾기 → 웹 조사 → 초안 + 점검 + 이미지")
+    _post_options(s)
+    s.set_defaults(func=cmd_auto)
 
     s = sub.add_parser("check", help="초안 폴더 다시 점검")
     s.add_argument("post_dir"); s.add_argument("--spell", action="store_true")

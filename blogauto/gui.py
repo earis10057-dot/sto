@@ -12,7 +12,7 @@ from pathlib import Path
 from tkinter import filedialog, font as tkfont, messagebox, scrolledtext, ttk
 from typing import Any, Callable
 
-from . import cli, config
+from . import config, pipeline
 from .config import ConfigError, load_settings, resolve
 from .images.cards import THEMES
 from .llm import LLMError
@@ -202,8 +202,21 @@ class App(tk.Tk):
         t.columnconfigure(1, weight=1)
         t.rowconfigure(0, weight=1)
 
-        left = ttk.LabelFrame(t, text=" 1. 무엇을 쓸까요? ", padding=10)
+        left = ttk.Frame(t)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        left.columnconfigure(0, weight=1)
+        left.rowconfigure(1, weight=1)
+
+        auto = ttk.LabelFrame(left, text=" 🤖 주제부터 알아서 ", padding=10)
+        auto.grid(row=0, column=0, sticky="ew")
+        auto.columnconfigure(0, weight=1)
+        self._button(auto, "🤖  알아서 써줘", self._auto, big=True).grid(
+            row=0, column=0, sticky="ew")
+        ttk.Label(auto, text="요즘 뜨는 주제 검색 → 자료 조사 → 글·이미지까지 한 번에 (5~10분)",
+                  style="Hint.TLabel").grid(row=1, column=0, sticky="w", pady=(4, 0))
+
+        left = ttk.LabelFrame(left, text=" ✍️ 주제를 정해서 쓰기 ", padding=10)
+        left.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
         left.columnconfigure(1, weight=1)
 
         self.v_topic, self.v_keyword, self.v_notes = tk.StringVar(), tk.StringVar(), tk.StringVar()
@@ -218,15 +231,17 @@ class App(tk.Tk):
 
         ref_head = ttk.Frame(left)
         ref_head.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(10, 2))
+        self.v_web = tk.BooleanVar(value=True)
+        ttk.Checkbutton(ref_head, text="🌐 웹에서 참고자료 자동 조사 (추천)", variable=self.v_web).pack(side="left")
         ttk.Button(ref_head, text="파일 불러오기", command=self._load_ref_file).pack(side="right")
-        ttk.Label(ref_head, text="참고자료 (공고 원문 붙여넣기)").pack(side="left")
-        ttk.Label(ref_head, text=" 정확도가 크게 올라가요", style="Hint.TLabel").pack(side="left")
-        self.ref_text = scrolledtext.ScrolledText(left, height=10, width=40, wrap="word")
-        self.ref_text.grid(row=7, column=0, columnspan=2, sticky="nsew")
-        left.rowconfigure(7, weight=1)
+        ttk.Label(left, text="가진 자료가 있으면 더 붙여넣으세요 (선택)", style="Hint.TLabel").grid(
+            row=10, column=0, columnspan=2, sticky="w")
+        self.ref_text = scrolledtext.ScrolledText(left, height=5, width=40, wrap="word")
+        self.ref_text.grid(row=11, column=0, columnspan=2, sticky="nsew")
+        left.rowconfigure(11, weight=1)
 
         opts = ttk.Frame(left)
-        opts.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        opts.grid(row=12, column=0, columnspan=2, sticky="ew", pady=(8, 0))
         self.v_spell, self.v_apply = tk.BooleanVar(value=False), tk.BooleanVar(value=False)
         ttk.Checkbutton(opts, text="맞춤법 검사", variable=self.v_spell).pack(side="left")
         ttk.Checkbutton(opts, text="수정안 바로 반영", variable=self.v_apply).pack(side="left", padx=8)
@@ -235,7 +250,7 @@ class App(tk.Tk):
         ttk.Combobox(opts, textvariable=self.v_theme, values=list(THEMES), width=8, state="readonly").pack(side="left")
 
         self._button(left, "✍️  초안 + 이미지 만들기", self._write, big=True).grid(
-            row=9, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+            row=13, column=0, columnspan=2, sticky="ew", pady=(10, 0))
 
         right = ttk.LabelFrame(t, text=" 2. 결과 ", padding=10)
         right.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
@@ -257,6 +272,7 @@ class App(tk.Tk):
             ("🔎 점검 리포트 보기", lambda: self._open_post("check_report.md")),
             ("🗂️ 이전 글 불러오기", self._load_previous),
             ("🔁 다시 점검", self._recheck),
+            ("🌐 웹 조사 노트 보기", lambda: self._open_post("research.md")),
         ]):
             self._button(btns, text, cmd, action=False).grid(row=i // 2, column=i % 2, sticky="ew", padx=2, pady=2)
 
@@ -282,18 +298,29 @@ class App(tk.Tk):
             messagebox.showwarning("주제를 입력해 주세요", "주제 칸이 비어 있습니다.")
             return
         notes, ref = self.v_notes.get().strip(), self.ref_text.get("1.0", "end").strip()
-        spell, apply, theme = self.v_spell.get(), self.v_apply.get(), self.v_theme.get()
+        spell, apply, theme, use_web = self.v_spell.get(), self.v_apply.get(), self.v_theme.get(), self.v_web.get()
 
         def work():
-            from .writer import draft
-            print("✍️  초안 작성 중... (1~3분 걸릴 수 있어요)")
-            post_dir, _ = draft.run(self.settings, topic, keyword=keyword or None, notes=notes,
-                                    ref_texts=[ref] if ref else None)
-            cli._check_and_report(post_dir, self.settings, spell=spell or apply, apply=apply)
-            cli._images(post_dir, self.settings, theme)
-            return post_dir
+            return pipeline.write_post(self.settings, topic, keyword=keyword or None, notes=notes,
+                                       ref_texts=[ref] if ref else None, web=use_web,
+                                       spell=spell, apply=apply, theme=theme)
 
         self.run_task("초안 만들기", work, self._show_post)
+
+    def _auto(self) -> None:
+        if not messagebox.askyesno("알아서 써줘", "웹에서 요즘 뜨는 주제를 찾아 자료 조사부터 글·이미지까지 만들어요.\n"
+                                   "5~10분 정도 걸리고 웹 검색 비용이 조금 더 들어요. 시작할까요?"):
+            return
+        spell, apply, theme = self.v_spell.get(), self.v_apply.get(), self.v_theme.get()
+
+        def done(post_dir: Path) -> None:
+            from .writer.draft import load_meta
+            meta = load_meta(post_dir)
+            self.v_topic.set(meta.get("topic", ""))
+            self.v_keyword.set(meta.get("main_keyword", ""))
+            self._show_post(post_dir)
+
+        self.run_task("알아서 쓰기", lambda: pipeline.auto_post(self.settings, spell=spell, apply=apply, theme=theme), done)
 
     def _show_post(self, post_dir: Path) -> None:
         from .writer.draft import load_meta
@@ -307,6 +334,9 @@ class App(tk.Tk):
         lines += ["", "[3줄 요약]"] + [f"  ✔ {s}" for s in meta["summary"]]
         if meta.get("fact_check"):
             lines += ["", "[📌 발행 전 공식 출처로 확인할 것]"] + [f"  - {f}" for f in meta["fact_check"]]
+        if meta.get("sources"):
+            lines += ["", f"[🌐 참고 출처 {len(meta['sources'])}곳 — 전체 조사 노트는 research.md]"]
+            lines += [f"  - {src['title']}" for src in meta["sources"]]
         report = post_dir / "check_report.md"
         if report.exists():
             warn = [ln for ln in report.read_text(encoding="utf-8").splitlines() if ln.startswith("- ⚠️")]
@@ -348,13 +378,13 @@ class App(tk.Tk):
     def _recheck(self) -> None:
         if self._need_post():
             post_dir, spell = self.post_dir, self.v_spell.get()
-            self.run_task("점검", lambda: cli._check_and_report(post_dir, self.settings, spell=spell, apply=False) or post_dir,
+            self.run_task("점검", lambda: pipeline.check_and_report(post_dir, self.settings, spell=spell),
                           self._show_post)
 
     def _rerender(self) -> None:
         if self._need_post():
             post_dir, theme, thumb = self.post_dir, self.v_theme.get(), int(self.v_thumb.get()[0])
-            self.run_task("이미지 만들기", lambda: cli._images(post_dir, self.settings, theme, thumb) or post_dir,
+            self.run_task("이미지 만들기", lambda: pipeline.render_images(post_dir, self.settings, theme, thumb),
                           lambda p: open_path(p / "images"))
 
     # ── 리서치 탭 ─────────────────────────────────────
@@ -366,11 +396,12 @@ class App(tk.Tk):
 
         bar = ttk.Frame(t)
         bar.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 8))
-        self._button(bar, "📊 검색량·트렌드 수집", self._keywords, big=True).pack(side="left", padx=(0, 6))
-        self._button(bar, "💡 오늘의 주제 추천", self._topics, big=True).pack(side="left", padx=6)
-        self._button(bar, "📢 새 공고 확인", self._monitor, big=True).pack(side="left", padx=6)
+        self._button(bar, "🔥 요즘 뜨는 주제 (웹 검색)", self._hot, big=True).pack(side="left", padx=(0, 6))
+        self._button(bar, "💡 홈판·키워드로 추천", self._topics).pack(side="left", padx=6)
+        self._button(bar, "📊 검색량·트렌드 수집", self._keywords).pack(side="left", padx=6)
+        self._button(bar, "📢 새 공고 확인", self._monitor).pack(side="left", padx=6)
         self.v_nollm = tk.BooleanVar(value=False)
-        ttk.Checkbutton(bar, text="주제 추천 때 AI 없이 통계만", variable=self.v_nollm).pack(side="left", padx=10)
+        ttk.Checkbutton(bar, text="AI 없이 통계만", variable=self.v_nollm).pack(side="left", padx=6)
 
         left = ttk.LabelFrame(t, text=" 홈판·인기글 제목 (한 줄에 하나씩 붙여넣기) ", padding=8)
         left.grid(row=1, column=0, sticky="nsew", padx=(0, 6))
@@ -432,6 +463,17 @@ class App(tk.Tk):
 
         self.run_task("검색량·트렌드 수집", work, lambda p: messagebox.showinfo("완료", f"엑셀에 저장했어요.\n{p}"))
 
+    def _hot(self) -> None:
+        from .research import web
+
+        def work():
+            print("🔥 웹에서 요즘 뜨는 주제를 찾는 중... (2~5분 걸릴 수 있어요)")
+            res = web.find_hot_topics(self.settings)
+            print(f"✅ 리포트 저장 → {res['path']}")
+            return res
+
+        self.run_task("요즘 뜨는 주제 찾기", work, self._show_topics)
+
     def _topics(self) -> None:
         from .research import topics
         self._save_homefeed()
@@ -471,6 +513,7 @@ class App(tk.Tk):
         self.v_topic.set(c["topic"])
         self.v_keyword.set(c["main_keyword"])
         self.v_notes.set(f"관점: {c['angle']}")
+        self.v_web.set(True)
         self.nb.select(self.tab_write)
 
     def _monitor(self) -> None:
