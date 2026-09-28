@@ -1,14 +1,37 @@
+# ── 비밀값: API 키가 들어 있으니 절대 커밋하지 않는다 ──
 .env
+.env.*
+!.env.example
+
+# ── 파이썬 ──
 __pycache__/
-*.pyc
+*.py[cod]
 .pytest_cache/
 .venv/
 venv/
+build/
+dist/
+*.spec
+*.egg-info/
+
+# ── 프로그램이 만드는 결과물·개인 데이터 ──
 output/
 data/*
 !data/homefeed.txt
-fonts/*
-!fonts/README.md
+config/user.yaml
 config/samples/*
 !config/samples/README.md
-config/user.yaml
+fonts/*
+!fonts/README.md
+*.log
+*.zip
+
+# ── 운영체제·편집기 ──
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# ── Claude Code 개인 설정 ──
+.claude/settings.local.json
