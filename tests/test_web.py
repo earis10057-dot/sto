@@ -132,3 +132,18 @@ def test_cli_auto(settings, project, sample_meta, monkeypatch, capsys):
     assert "고른 주제: A 주제" in out and "출처 2곳" in out
     post_dir = next((project / "output" / "posts").iterdir())
     assert json.loads((post_dir / "meta.json").read_text(encoding="utf-8"))["topic"] == "A 주제"
+
+
+def test_low_credit_error_is_explained_in_korean():
+    import anthropic
+    import httpx2 as httpx
+
+    def handler(req):
+        return httpx.Response(400, json={"type": "error", "error": {
+            "type": "invalid_request_error",
+            "message": "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing."}})
+
+    client = anthropic.Anthropic(api_key="x", max_retries=0,
+                                 http_client=httpx.Client(transport=httpx.MockTransport(handler)))
+    with pytest.raises(llm.LLMError, match="크레딧이 부족"):
+        llm.web_research("s", "p", client_factory=lambda: client)

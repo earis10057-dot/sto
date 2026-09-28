@@ -46,6 +46,9 @@ def _stream(client: anthropic.Anthropic, **kwargs: Any):
     except anthropic.RateLimitError as e:
         raise LLMError("API 호출 한도를 초과했습니다. 잠시 후 다시 시도하세요.") from e
     except anthropic.APIStatusError as e:
+        if "credit balance" in str(e.message).lower():
+            raise LLMError("Claude API 크레딧이 부족합니다. console.anthropic.com → Settings → Billing 에서 "
+                           "크레딧을 충전한 뒤 다시 시도하세요. (Claude 앱 구독과 API 크레딧은 따로 결제돼요)") from e
         raise LLMError(f"Claude API 오류 ({e.status_code}): {e.message}") from e
     except anthropic.APIConnectionError as e:
         raise LLMError("Claude API 에 연결하지 못했습니다. 네트워크를 확인하세요.") from e
