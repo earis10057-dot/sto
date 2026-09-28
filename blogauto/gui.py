@@ -1,4 +1,4 @@
-"""버튼으로 쓰는 프로그램 화면 (tkinter). 실행: python -m blogauto.gui 또는 '시작하기' 파일 더블클릭."""
+"""버튼으로 쓰는 프로그램 화면 (tkinter). 실행: python -m blogauto.gui 또는 start-windows.bat · start-mac.command 더블클릭."""
 from __future__ import annotations
 
 import os
