@@ -1,0 +1,87 @@
+# 네이버 블로그 자동화 설정
+# 경로는 프로젝트 루트(이 파일이 있는 config/ 의 상위 폴더) 기준입니다.
+
+# ─────────────────────────────────────────────
+# 1. 키워드 리서치
+# ─────────────────────────────────────────────
+seed_keywords:
+  - 근로장려금
+  - 청년도약계좌
+  - 기초연금
+  - 주택담보대출 금리
+  - 에너지바우처
+
+keywords:
+  related_limit: 30          # 시드 키워드마다 저장할 연관 키워드 수 (검색량 많은 순)
+  min_monthly_total: 100     # 월간 검색량(PC+모바일)이 이보다 적은 연관 키워드는 버림
+  spreadsheet: data/keywords.xlsx
+
+trend:
+  days: 30                   # 데이터랩 트렌드 조회 기간(일)
+  rising_window: 7           # 최근 N일 평균과 그 이전 N일 평균을 비교해 급상승 판단
+
+# ─────────────────────────────────────────────
+# 2. 오늘의 주제 후보
+# ─────────────────────────────────────────────
+topics:
+  homefeed_file: data/homefeed.txt   # 홈판·인기글 제목을 한 줄에 하나씩 붙여넣는 파일
+  search_display: 30                 # 시드 키워드별 네이버 블로그 검색 결과 수집 개수
+  count: 10                          # 뽑아낼 주제 후보 개수
+  output_dir: output/topics
+
+# ─────────────────────────────────────────────
+# 3. 공식 사이트 신규 공고 모니터링
+# ─────────────────────────────────────────────
+monitor:
+  state_file: data/monitor_state.json
+  output_dir: output/monitor
+  # 제목에 아래 단어가 하나라도 있어야 알림 (비우면 전부 알림)
+  include_keywords: [지원금, 지원사업, 장려금, 수당, 바우처, 신청, 대출, 금리, 세금, 환급, 연금, 공제, 청년, 소상공인]
+  # 제목에 아래 단어가 있으면 제외
+  exclude_keywords: [채용, 입찰, 인사]
+  # 사이트 개편으로 주소가 바뀔 수 있으니 처음 한 번은 브라우저로 열어 확인하세요.
+  sources:
+    - name: 정책브리핑 정책뉴스
+      type: rss
+      url: https://www.korea.kr/rss/policy.xml
+    - name: 정책브리핑 보도자료
+      type: rss
+      url: https://www.korea.kr/rss/pressrelease.xml
+    # RSS가 없는 사이트는 html 타입으로 게시판 목록 페이지를 지정합니다.
+    # link_selector 는 게시글 제목 <a> 태그를 고르는 CSS 선택자입니다.
+    # - name: OO부 공지사항
+    #   type: html
+    #   url: https://www.example.go.kr/board/list.do
+    #   link_selector: "td.subject a"
+
+# ─────────────────────────────────────────────
+# 4. 글 초안 작성
+# ─────────────────────────────────────────────
+writer:
+  style_file: config/style.md        # 내 문체·구조 설명 (자유롭게 수정)
+  samples_dir: config/samples        # 내가 예전에 쓴 글(.txt/.md)을 넣어두면 문체를 따라 씀
+  heading_marker: "■"                # 소제목 앞 기호
+  use_quote: true                    # 섹션마다 핵심 한 줄을 인용구로 넣기
+  sections: 5                        # 소제목 개수
+  target_chars: 2500                 # 본문 목표 글자수(공백 제외)
+  output_dir: output/posts
+
+# ─────────────────────────────────────────────
+# 5. 맞춤법·금칙어 점검
+# ─────────────────────────────────────────────
+checker:
+  banned_words_file: config/banned_words.yaml
+  min_chars: 1500            # 공백 제외 최소 글자수
+  keyword_min: 3             # 메인 키워드 최소 등장 횟수
+  keyword_max: 12            # 이보다 많으면 과도한 반복 경고
+  long_sentence: 120         # 이 글자수를 넘는 문장은 너무 길다고 경고
+
+# ─────────────────────────────────────────────
+# 6. 이미지
+# ─────────────────────────────────────────────
+images:
+  theme: navy                # navy | mint | coral | mono | forest
+  badge: "2026 최신"          # 썸네일 좌상단 배지 문구 (빈 문자열이면 표시 안 함)
+  blog_name: ""              # 썸네일 하단에 들어갈 블로그 이름 (선택)
+  font_regular: ""           # 폰트 경로 직접 지정 (비우면 자동 탐색)
+  font_bold: ""

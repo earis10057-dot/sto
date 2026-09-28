@@ -1,0 +1,13 @@
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+output/
+data/*
+!data/homefeed.txt
+fonts/*
+!fonts/README.md
+config/samples/*
+!config/samples/README.md
