@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import resolve
+from ..layout import THUMBNAIL, body_images
 from ..llm import generate_json
 
 DRAFT_SCHEMA = {
@@ -43,11 +44,14 @@ DRAFT_SCHEMA = {
                 "additionalProperties": False,
             },
         },
+        "image_sections": {"type": "array", "items": {"type": "integer"},
+                           "description": "본문 16:9 이미지를 넣을 소제목 번호(1부터) 2개. "
+                                          "독자가 가장 궁금해할 핵심이나 조건·금액·절차를 정리한 소제목을 고르고, 서로 붙어 있지 않게"},
         "fact_check": {"type": "array", "items": {"type": "string"},
                        "description": "발행 전 공식 출처로 반드시 확인해야 할 사실(금액·기간·조건) 목록"},
     },
     "required": ["main_keyword", "titles", "intro", "sections", "outro", "summary", "hashtags",
-                 "thumbnail_texts", "fact_check"],
+                 "thumbnail_texts", "image_sections", "fact_check"],
     "additionalProperties": False,
 }
 
@@ -104,27 +108,30 @@ def render(meta: dict[str, Any], wcfg: dict[str, Any], markdown: bool) -> str:
     """markdown=True 는 미리보기용(draft.md), False 는 네이버 에디터 붙여넣기용(draft.txt)."""
     mark = wcfg.get("heading_marker", "■")
     use_quote = wcfg.get("use_quote", True)
+    plan = body_images(meta)
+    image = lambda path, alt: f"![{alt}]({path})\n" if markdown else f"[이미지: {path}]\n"  # noqa: E731
     out: list[str] = []
     if markdown:
         out.append("<!-- 제목 후보 (하나를 골라 발행하세요) -->")
         out += [f"<!-- {i}. {t} -->" for i, t in enumerate(meta["titles"], 1)]
         out.append(f"\n# {meta['titles'][0]}\n")
-        out.append("![썸네일](images/thumbnail_1.png)\n")
+        out.append(f"![썸네일]({THUMBNAIL})\n")
     else:
         out.append("[제목 후보]\n" + "\n".join(f"{i}. {t}" for i, t in enumerate(meta["titles"], 1)))
         out.append("\n" + "=" * 30 + "\n")
-        out.append("[썸네일: images/thumbnail_1.png]\n")
+        out.append(f"[대표 이미지(썸네일): {THUMBNAIL}]\n")
     out.append(meta["intro"].strip() + "\n")
+    out.append(image(plan["contents"], "목차"))
 
     for i, sec in enumerate(meta["sections"], 1):
-        img = f"images/section_{i:02d}.png"
-        out.append(f"![섹션 {i}]({img})\n" if markdown else f"[이미지: {img}]\n")
+        if i in plan["sections"]:
+            out.append(image(plan["sections"][i], f"소제목 {i}"))
         out.append(f"{'## ' if markdown else ''}{mark} {sec['heading']}\n")
         if use_quote and sec["quote"].strip():
             out.append(f"> {sec['quote']}\n" if markdown else f"[인용구] {sec['quote']}\n")
         out.append(sec["body"].strip() + "\n")
 
-    out.append("![요약](images/summary.png)\n" if markdown else "[이미지: images/summary.png]\n")
+    out.append(image(plan["summary"], "요약"))
     out.append(f"{'## ' if markdown else ''}{mark} 한눈에 정리\n")
     out += [f"✔ {s}" for s in meta["summary"]]
     out.append("\n" + meta["outro"].strip() + "\n")

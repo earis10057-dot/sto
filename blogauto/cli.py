@@ -64,11 +64,12 @@ def _check_and_report(post_dir: Path, settings, spell: bool, apply: bool):
         print(f"   - ⚠️ {w}")
 
 
-def _images(post_dir: Path, settings, theme):
+def _images(post_dir: Path, settings, theme, thumb: int = 1):
     from .images.cards import render_post
     from .writer.draft import load_meta
-    paths = render_post(load_meta(post_dir), post_dir, settings.get("images", {}), theme)
-    print(f"🖼️  이미지 {len(paths)}장 생성 → {post_dir / 'images'}")
+    paths = render_post(load_meta(post_dir), post_dir, settings.get("images", {}), theme, thumb=thumb)
+    print(f"🖼️  썸네일 1장(1:1) + 본문 이미지 {len(paths) - 1}장(16:9) 생성 → {post_dir / 'images'}")
+    print("   본문 속 위치는 draft.txt 의 [이미지: ...] 표시를 참고하세요.")
 
 
 def cmd_write(args, settings):
@@ -94,7 +95,7 @@ def cmd_check(args, settings):
 
 
 def cmd_images(args, settings):
-    _images(Path(args.post_dir), settings, args.theme)
+    _images(Path(args.post_dir), settings, args.theme, args.thumb)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -138,6 +139,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("images", help="초안 폴더의 meta.json 으로 이미지 다시 만들기")
     s.add_argument("post_dir"); s.add_argument("--theme")
+    s.add_argument("--thumb", type=int, default=1, help="썸네일 문구 후보 중 몇 번째를 쓸지 (1~3)")
     s.set_defaults(func=cmd_images)
     return p
 
