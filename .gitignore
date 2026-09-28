@@ -11,3 +11,4 @@ fonts/*
 !fonts/README.md
 config/samples/*
 !config/samples/README.md
+config/user.yaml

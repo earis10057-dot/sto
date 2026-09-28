@@ -163,13 +163,15 @@ def body_text(meta: dict[str, Any]) -> str:
 
 
 def run(settings: dict[str, Any], topic: str, keyword: str | None = None, notes: str = "",
-        ref_files: list[str] | None = None, today: date | None = None) -> tuple[Path, dict[str, Any]]:
+        ref_files: list[str] | None = None, today: date | None = None,
+        ref_texts: list[str] | None = None) -> tuple[Path, dict[str, Any]]:
     today = today or date.today()
     wcfg = settings.get("writer", {})
     style_path = resolve(wcfg.get("style_file", "config/style.md"))
     style = style_path.read_text(encoding="utf-8") if style_path.exists() else ""
     samples = load_samples(resolve(wcfg.get("samples_dir", "config/samples")))
     references = [Path(f).read_text(encoding="utf-8") for f in (ref_files or [])]
+    references += [t for t in (ref_texts or []) if t.strip()]
 
     prompt = build_prompt(topic, keyword, notes, references, style, samples, wcfg, today)
     meta = generate_json(SYSTEM, prompt, DRAFT_SCHEMA, effort="high")
